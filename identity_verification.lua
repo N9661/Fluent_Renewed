@@ -3,14 +3,20 @@ local IdentityVerification = {}
 function IdentityVerification.getClientId()
     local clientId = ""
     
-    pcall(function()
-        clientId = game:GetService("RbxAnalyticsService"):GetClientId()
+    local success, result = pcall(function()
+        return game:GetService("RbxAnalyticsService"):GetClientId()
     end)
     
-    if clientId == "" then
-        pcall(function()
-            clientId = game:GetService("HttpService"):GenerateGUID(false)
+    if success and result and result ~= "" then
+        clientId = result
+    else
+        local success2, result2 = pcall(function()
+            return game:GetService("HttpService"):GenerateGUID(false)
         end)
+        
+        if success2 and result2 then
+            clientId = result2
+        end
     end
     
     return clientId
@@ -19,22 +25,26 @@ end
 function IdentityVerification.getHWID()
     local hwid = ""
     
-    pcall(function()
+    local success, result = pcall(function()
         local placeId = game.PlaceId
         local jobId = game.JobId
         local clientId = IdentityVerification.getClientId()
         
         local combinedString = tostring(placeId) .. tostring(jobId) .. tostring(clientId)
         
+        -- More reliable hash function for Lua
         local hash = 0
         for i = 1, #combinedString do
-            hash = ((hash << 5) - hash) + string.byte(combinedString, i)
-            hash = hash & hash -- Convert to 32bit integer
+            hash = (hash * 31 + string.byte(combinedString, i)) % 2147483647
         end
         
-        hwid = tostring(hash)
+        return tostring(hash)
     end)
-        
+    
+    if success and result then
+        hwid = result
+    end
+    
     return hwid
 end
 
@@ -42,12 +52,12 @@ function IdentityVerification.compareClientIdFirstThreeParts(whitelistedId, user
     if not whitelistedId or not userClientId then return false end
     
     local whitelistedParts = string.split(whitelistedId, "-")
-    if #whitelistedParts < 3 then return false end
-    local whitelistedFirstThree = whitelistedParts[1] .. "-" .. whitelistedParts[2] .. "-" .. whitelistedParts[3]
-    
     local userParts = string.split(userClientId, "-")
-    if #userParts < 3 then return false end
-    local userFirstThree = userParts[1] .. "-" .. userParts[2] .. "-" .. userParts[3]
+    
+    if #whitelistedParts < 3 or #userParts < 3 then return false end
+    
+    local whitelistedFirstThree = table.concat({whitelistedParts[1], whitelistedParts[2], whitelistedParts[3]}, "-")
+    local userFirstThree = table.concat({userParts[1], userParts[2], userParts[3]}, "-")
     
     return whitelistedFirstThree == userFirstThree
 end
@@ -55,34 +65,35 @@ end
 function IdentityVerification.getUsername()
     local results = {}
     
+    -- Try to get username from LocalPlayer
     pcall(function()
         if game.Players.LocalPlayer then
             table.insert(results, {name = game.Players.LocalPlayer.Name, weight = 1})
         end
     end)
     
+    -- Try alternative method
     pcall(function()
         if game:GetService("Players").LocalPlayer then
             table.insert(results, {name = game:GetService("Players").LocalPlayer.Name, weight = 1})
         end
     end)
     
+    -- Try to get name from UserId
     pcall(function()
         local player = game.Players.LocalPlayer
-        if not player then return end
-        
-        local userId = player.UserId
-        if not userId then return end
-        
-        local success, result = pcall(function()
-            return game:GetService("Players"):GetNameFromUserIdAsync(userId)
-        end)
-        
-        if success and result then
-            table.insert(results, {name = result, weight = 5})
+        if player and player.UserId then
+            local success, result = pcall(function()
+                return game:GetService("Players"):GetNameFromUserIdAsync(player.UserId)
+            end)
+            
+            if success and result then
+                table.insert(results, {name = result, weight = 5})
+            end
         end
     end)
     
+    -- Try to get name from PlayerGui parent
     pcall(function()
         if game.Players.LocalPlayer and game.Players.LocalPlayer:FindFirstChild("PlayerGui") then
             local name = game.Players.LocalPlayer.PlayerGui.Parent.Name
@@ -90,39 +101,7 @@ function IdentityVerification.getUsername()
         end
     end)
     
-    local nameCount = {}
-    local highestCount = 0
-    local mostLikelyName = nil
-    
-    for _, result in ipairs(results) do
-        if result and result.name then
-            if not nameCount[result.name] then
-                nameCount[result.name] = 0
-            end
-            nameCount[result.name] = nameCount[result.name] + result.weight
-            
-            if nameCount[result.name] > highestCount then
-                highestCount = nameCount[result.name]
-                mostLikelyName = result.name
-            end
-        end
-    end
-    
-    local spoofingDetected = false
-    local uniqueNames = 0
-    for _ in pairs(nameCount) do
-        uniqueNames = uniqueNames + 1
-    end
-    
-    if uniqueNames > 1 then
-        spoofingDetected = true
-    end
-    
-    return {
-        username = mostLikelyName,
-        confidence = highestCount,
-        spoofingDetected = spoofingDetected
-    }
+    return IdentityVerification._processResults(results)
 end
 
 function IdentityVerification.getUserId()
@@ -140,40 +119,48 @@ function IdentityVerification.getUserId()
         end
     end)
     
-    local idCount = {}
+    return IdentityVerification._processResults(results, "id", "userId")
+end
+
+-- Helper function to process results and detect spoofing
+function IdentityVerification._processResults(results, keyName, returnKeyName)
+    keyName = keyName or "name"
+    returnKeyName = returnKeyName or "username"
+    
+    local valueCount = {}
     local highestCount = 0
-    local mostLikelyId = nil
+    local mostLikelyValue = nil
     
     for _, result in ipairs(results) do
-        if result and result.id then
-            if not idCount[result.id] then
-                idCount[result.id] = 0
-            end
-            idCount[result.id] = idCount[result.id] + result.weight
+        if result and result[keyName] then
+            local value = result[keyName]
+            valueCount[value] = (valueCount[value] or 0) + result.weight
             
-            if idCount[result.id] > highestCount then
-                highestCount = idCount[result.id]
-                mostLikelyId = result.id
+            if valueCount[value] > highestCount then
+                highestCount = valueCount[value]
+                mostLikelyValue = value
             end
         end
     end
     
     -- Check for spoofing
     local spoofingDetected = false
-    local uniqueIds = 0
-    for _ in pairs(idCount) do
-        uniqueIds = uniqueIds + 1
+    local uniqueValues = 0
+    for _ in pairs(valueCount) do
+        uniqueValues = uniqueValues + 1
     end
     
-    if uniqueIds > 1 then
+    if uniqueValues > 1 then
         spoofingDetected = true
     end
     
-    return {
-        userId = mostLikelyId,
-        confidence = highestCount,
-        spoofingDetected = spoofingDetected
+    local result = {
+        spoofingDetected = spoofingDetected,
+        confidence = highestCount
     }
+    result[returnKeyName] = mostLikelyValue
+    
+    return result
 end
 
 -- Comprehensive identity verification
