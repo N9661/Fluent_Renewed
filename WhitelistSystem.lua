@@ -1,8 +1,8 @@
 local WhitelistCore = {}
 
-local SecurityUtils = loadstring(game:HttpGet("https://raw.githubusercontent.com/N9661/Working-On-Whitelist-System/refs/heads/main/security_utils.lua"))()
-local IdentityVerification = loadstring(game:HttpGet("https://raw.githubusercontent.com/N9661/Working-On-Whitelist-System/refs/heads/main/identity_verification.lua"))()
-local WhitelistData = loadstring(game:HttpGet("https://raw.githubusercontent.com/N9661/Working-On-Whitelist-System/refs/heads/main/whitelist_data.lua"))()
+local SecurityUtils = loadstring(game:HttpGet("https://raw.githubusercontent.com/N9661/Fluent_Renewed/refs/heads/main/whitelist_core.lua"))()
+local IdentityVerification = loadstring(game:HttpGet("https://raw.githubusercontent.com/N9661/Fluent_Renewed/refs/heads/main/identity_verification.lua"))()
+local WhitelistData = loadstring(game:HttpGet("https://raw.githubusercontent.com/N9661/Fluent_Renewed/refs/heads/main/whitelist_data.lua"))()
 
 local _G = _G or getgenv()
 if not _G.__WhitelistState then
