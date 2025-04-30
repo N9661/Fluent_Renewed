@@ -1,0 +1,22 @@
+local success, WhitelistCore = pcall(function()
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/N9661/Fluent_Renewed/refs/heads/main/WhitelistSystem.lua"))()
+end)
+
+if not success or not WhitelistCore then
+    local errorCode = math.random(1000, 9999)
+    pcall(function()
+        game.Players.LocalPlayer:Kick("Failed to initialize (Error Code: " .. errorCode .. ")")
+    end)
+    error("Failed to load whitelist system: Error code 0x" .. string.format("%x", errorCode))
+    return
+end
+
+local authorized = WhitelistCore.initialize()
+
+if authorized then
+    print("Main script loaded successfully!")
+    
+    local player = game.Players.LocalPlayer
+    print("Welcome, " .. player.Name .. "!")
+    
+end
