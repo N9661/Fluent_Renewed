@@ -1,6 +1,6 @@
 return {
     {
-        username = "HVX_Havoc",
+        username = "HVX_Haoc",
         userId = 8367759083,
         clientId = "fba078e1-e7a1-4082-0000-000000000000",
         hwid = "e9b170f70b95881d19abdb753e64d6513e354bc72e37c7d45b13b1f36ec3aa60"
